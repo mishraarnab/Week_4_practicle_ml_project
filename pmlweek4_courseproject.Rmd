@@ -1,0 +1,239 @@
+---
+title: "Practicle machine learning week 4 course project"
+author: "Arnab Mishra"
+date: "28/09/2020"
+---
+## Packages 
+First we will load some packages to get started.
+```{r setup, include=FALSE}
+
+library(lattice)
+library(ggplot2)
+library(plyr)
+library(randomForest)
+```
+
+## Executive Summary
+
+
+## Loading data
+First we will load the data set using read.csv. We can load both train and test set.
+
+```{r}
+firsttrainset <- read.csv("C:/Users/Arnab Mishra/Downloads/pml-training.csv")
+firsttestset <- read.csv("C:/Users/Arnab Mishra/Downloads/pml-testing.csv")
+```
+
+## Exploratory data analyses 
+
+Look at the dimensions & head of the dataset to get an idea
+```{r}
+#lets look at the dimensions of the datqaset
+dim(firsttrainset)
+# Then we will observe first few elements of the dataset
+ head(firsttrainset,10 )
+# We will observe the structure of dataset like its attributes and all.
+str(firsttrainset )
+#Atlast we will see the summary of the dataset like mean, median, first quartile element etc.
+summary(firsttrainset )
+```
+
+
+```{r echo=TRUE}
+#converting values into factors
+clslb1 <- levels(firsttrainset$classe)
+thirdtrancle <- data.frame(data.matrix(firsttrainset))
+thirdtrancle$classe <- factor(thirdtrancle$classe, labels=1)
+thirdtestcle <- data.frame(data.matrix(firsttrainset))
+```
+
+
+```{r}
+cledftran<- thirdtrancle
+cledftest<- thirdtestcle 
+```
+
+
+## Further analysis
+We will use the caret package for plotting the confusion matrix.
+```{r}
+library(caret)
+bhtcle <- which(names(cledftran) == "classe")
+div<- createDataPartition(y=cledftran$classe, p=0.75, list=FALSE)
+trnparttran <- cledftran[div, ]
+tetparttran <- cledftran[-div, ]
+```
+
+
+
+```{r}
+#finding relationship between the attributes of the data.
+df_cor <- cor(trnparttran[, -bhtcle], as.numeric(trnparttran$classe))
+corthehigh<- subset(as.data.frame(as.table(df_cor)), abs(Freq)>0.3)
+corthehigh
+```
+
+
+```{r}
+#plotting box plots and observing the difference.
+library(Rmisc)
+library(ggplot2)
+a1<- ggplot(trnparttran, aes(classe,pitch_forearm)) + 
+  geom_boxplot(aes(fill=classe))
+a2<- ggplot(trnparttran, aes(classe, magnet_arm_x)) + 
+  geom_boxplot(aes(fill=classe))
+multiplot(a1,a2,cols=2)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Now we will plot the correlation plot. We can observe that few attributes of data has high correlation.
+library(corrplot)
+df_2dcor <- cor(trnparttran[, -bhtcle])
+topdf_cor <- findCorrelation(df_2dcor, cutoff=0.9, exact=TRUE)
+exptdf_atr <- c(topdf_cor,bhtcle)
+corrplot(df_2dcor, method="color", type="lower", order="hclust", tl.cex=0.70, tl.col="green", tl.srt = 45, diag = FALSE)
+```
+
+
+
+```{r echo=TRUE}
+# While preparing our model we will remove the attributes having high correlation. Also we will use dimensional reduction method to hide unneccessary parts of data and combine all the data which are required.
+
+pcaPreProcess.all <- preProcess(trnparttran[, -bhtcle], method = "pca", thresh = 0.99)
+trnparttranevpc <- predict(pcaPreProcess.all, trnparttran[, -bhtcle])
+testparttranevpc <- predict(pcaPreProcess.all,tetparttran[, -bhtcle])
+testpartevpc <- predict(pcaPreProcess.all, cledftest[, -bhtcle])
+partevpc <- preProcess(trnparttran[, -exptdf_atr], method = "pca", thresh = 0.99)
+trnparttranpart <- predict(partevpc, trnparttran[, -exptdf_atr])
+testparttranpart<- predict(partevpc, tetparttran[, -exptdf_atr])
+testpcpart<- predict(partevpc,cledftest[, -bhtcle])
+```
+
+Now we'll do some actual Random Forest training.
+We'll use 200 trees, because I've already seen that the error rate doesn't decline a lot after say 50 trees, but we still want to be thorough.
+Also we will time each of the 4 random forest models to see if when all else is equal one pops out as the faster one.
+
+```{r eval=FALSE, include=FALSE}
+#Now we will perform random forest algorithm to train our model. Here we will take 150 trees which can be sufficient.
+library(randomForest)
+nicetr_df<- 150 
+df_arm <- proc.time()
+cln_dfr <- randomForest(
+  x=trnparttran[, -bhtcle], 
+  y=trnparttran$classe,
+  df_tetx=tetparttran[, -bhtcle], 
+  df_tety=tetparttran$classe, 
+  nicetr_df=nicetr_df,
+  keep.forest=TRUE,
+  proximity=TRUE) 
+proc.time() - df_arm
+
+
+df_arm <- proc.time()
+exd_dfr <- randomForest(
+  x=trnparttran[, -exptdf_atr], 
+  y=trnparttran$classe,
+  df_tetx=tetparttran[, -exptdf_atr], 
+  df_tety=tetparttran$classe, 
+  nicetr_df=nicetr_df,
+  keep.forest=TRUE,
+  proximity=TRUE) 
+proc.time() - df_arm
+
+
+df_arm<- proc.time()
+pcdf_alr <- randomForest(
+  x=trnparttran.pca.all, 
+  y=trnparttran$classe,
+  df_tetx=tetparttranevpc, 
+  df_tety=tetparttran$classe, 
+  nicetr_df=nicetr_df,
+  keep.forest=TRUE,
+  proximity=TRUE) 
+proc.time() - df_arm
+
+
+df_arm <- proc.time()
+partpcdf_r<- randomForest(
+  x=trnparttranpart, 
+  y=trnparttran$classe,
+  df_tetx=testparttranpart, 
+  df_tety=tetparttran$classe, 
+  ntree=ntree,
+  keep.forest=TRUE,
+  proximity=TRUE) 
+proc.time() - df_arm
+```
+
+```{r eval=FALSE, include=FALSE}
+#In the last block we prepared 4 models. But now we have to see how sucessesful in traing the model. This can be achieved by observing the accuracy of each model.
+cln_dfr
+cln_dfractr <- round(1-sum(cln_dfr$confusion[, 'class.error']),3)
+paste0("1.train acc> ",cln_dfractr)
+cln_dfractet <- round(1-sum(exd_dfr$test$confusion[, 'class.error']),3)
+paste0("test acc> ",cln_dfractet )
+exd_dfr
+ex_dfractr <- round(1-sum(exd_dfr$confusion[, 'class.error']),3)
+paste0("2.train acc> ",ex_dfractr)
+ex_dfractet<- round(1-sum(exd_dfr$test$confusion[, 'class.error']),3)
+paste0("test acc> ",ex_dfractet)
+pcdf_alr
+pcdf_acc<- round(1-sum(pcdf_alr$confusion[, 'class.error']),3)
+paste0("3.train acc> ",pcdf_acc)
+pcdf_acc <- round(1-sum(pcdf_alr$test$confusion[, 'class.error']),3)
+paste0("test acc> ",pcdf_acctet)
+partpsdf_r
+partpsdf_rac <- round(1-sum(partpsdf_r$confusion[, 'class.error']),3)
+paste0("4.train acc> ",partpsdf_rac)
+partpsdf_ractet <- round(1-sum(partpsdf_r$test$confusion[, 'class.error']),3)
+paste0("test acc>  ",partpsdf_ractet)
+```
+
+## Observations
+
+We can obseve that PCA doesnt have a good high effect. We also found out that 4th model has the highest accuracy.
+
+The accuracy of 98.7% of the 4th model.
+
+```{r eval=FALSE, include=FALSE}
+#Examining the model 4 to find deeper insights.
+par(mfrow=c(1,2)) 
+varImpPlot(partpsdf_r, cex=0.7, pch=16, main='Part 4 plot')
+plot(partpsdf_r, , cex=0.7, main='Variasion of trees ')
+par(mfrow=c(1,1)) 
+```
+
+```{r eval=FALSE, include=FALSE}
+df_arm<- proc.time()
+library(RColorBrewer)
+ptte<- brewer.pal(length(classeLevels), "Set1")
+dmdf_r <- MDSplot(exd_dfr, as.factor(classeLevels), k=2, pch=20, ptte=ptte)
+library(cluster)
+exd_dfrpam <- pam(1 - exd_dfr$proximity, k=length(classeLevels), diss=TRUE)
+plot(
+  dmdf_r $points[, 1], 
+  dmdf_r $points[, 2], 
+  pch=exd_dfrpam  $clustering+14, 
+  col=alpha(ptte[as.numeric(trnparttran$classe)],0.5), 
+  bg=alpha(palette[as.numeric(trnparttran$classe)],0.2), 
+  cex=0.5,
+  xlab="x", ylab="y")
+legend("bottomleft", legend=unique(exd_dfrpam $clustering), chdf_pc=seq(15,14+length(classeLevels)), title = "class plot")
+  legend("topleft", legend=classeLevels, chdf_pc = 16, col=ptte, title = "distribution")
+proc.time() - df_arm
+```
+
+# Predictions
+Of all the models.
+
+```{r eval=FALSE, include=FALSE}
+detct<- t(cbind(
+    exclude=as.data.frame(predict(exd_dfr, cledftest[, -exptdf_atr]), optional=TRUE),
+    cleaned=as.data.frame(predict(cln_dfr, cledftest), optional=TRUE),
+    pcaAll=as.data.frame(predict(pcdf_alr, testpartevpc), optional=TRUE),
+    pcaExclude=as.data.frame(predict(partpcdf_r, testpcpart), optional=TRUE)
+))
+detct
+#Finally we will stick our analysis with the 4th model.
+```
